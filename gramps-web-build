@@ -144,7 +144,7 @@ curl -sf -H "Host: $servername" "http://127.0.0.1/" > /dev/null \
 cd || exit 1
 echo -e "\n\n########### Install is complete \o/ ############\n
 Open http://${servername}/ in a browser and create the admin account.
-Then create a family tree from the admin settings.
+To load an existing tree: Settings -> Administration -> Data -> Import Family Tree.
 
  - ${servername} must resolve to this machine (DNS or /etc/hosts on the clients).
  - Service:  systemctl status gramps-web    Logs: journalctl -u gramps-web

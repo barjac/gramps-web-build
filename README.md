@@ -8,13 +8,15 @@ service behind Apache, without Docker.
 - Frontend: the prebuilt `grampsjs-vX.Y.Z.tar.gz` release from GitHub (no Node).
 - Storage: SQLite for family trees, users and the search index.
 - No Celery/Redis: background tasks run inline.
-- Multi-tree mode: the first-run page creates an admin, who then creates trees.
+- Multi-tree mode: the first-run page creates an admin and an empty tree. To
+  load an existing tree use Settings -> Administration -> Data (collapsed
+  section) -> Import Family Tree.
 
 ## Install
 
 ```
 cd ~/GIT
-git clone <this repo> gramps-web-build
+git clone https://github.com/barjac/gramps-web-build.git
 ~/GIT/gramps-web-build/gramps-web-build
 ```
 
