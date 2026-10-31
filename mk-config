@@ -1,0 +1,82 @@
+#!/bin/bash
+
+# Create <basedir>/config.cfg and the data directories owned by gramps-web.
+# An existing config.cfg is kept, so SECRET_KEY is only generated once.
+# Usage (as root): mk-config <basedir> <servername>
+
+((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
+basedir=$1
+servername=$2
+[[ -n $basedir && -n $servername ]] || { echo "Usage: $0 <basedir> <servername>"; exit 1; }
+data=$basedir/data
+
+# Data dirs - the only place the service can write
+for d in "" grampsdb media users search backup cache cache/request cache/thumbnail \
+         cache/persistent cache/reports cache/export; do
+    install -d -m 0750 -o gramps-web -g gramps-web "$data/$d" || { echo "ERROR: creating $data/$d failed"; exit 1; }
+done
+
+if [[ -f $basedir/config.cfg ]]; then
+    echo "Keeping existing $basedir/config.cfg"
+    exit 0
+fi
+
+secret=$(python3 -c 'import secrets; print(secrets.token_urlsafe(48))') || exit 1
+
+cat > "$basedir/config.cfg" <<EOF
+# Gramps Web API configuration - created by gramps-web-build on $(date +%F)
+# Python syntax. After editing: systemctl restart gramps-web
+# Options: https://www.grampsweb.org/install_setup/configuration/
+
+# Multi-tree mode: the admin creates trees in the web UI
+TREE = "*"
+MEDIA_PREFIX_TREE = True
+
+BASE_URL = "http://$servername/"
+SECRET_KEY = "$secret"
+
+USER_DB_URI = "sqlite:///$data/users/users.sqlite"
+SEARCH_INDEX_DB_URI = "sqlite:///$data/search/search_index.db"
+MEDIA_BASE_DIR = "$data/media"
+STATIC_PATH = "$basedir/static"
+BACKUP_DIR = "$data/backup"
+REPORT_DIR = "$data/cache/reports"
+EXPORT_DIR = "$data/cache/export"
+
+REQUEST_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": "$data/cache/request",
+    "CACHE_THRESHOLD": 1000,
+    "CACHE_DEFAULT_TIMEOUT": 0,
+}
+THUMBNAIL_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": "$data/cache/thumbnail",
+    "CACHE_THRESHOLD": 1000,
+    "CACHE_DEFAULT_TIMEOUT": 0,
+}
+PERSISTENT_CACHE_CONFIG = {
+    "CACHE_TYPE": "FileSystemCache",
+    "CACHE_DIR": "$data/cache/persistent",
+    "CACHE_THRESHOLD": 0,
+    "CACHE_DEFAULT_TIMEOUT": 0,
+}
+
+# Background tasks run inline - no Celery/Redis
+# CELERY_CONFIG = {}
+
+# Uncomment to turn off Gramps Web API telemetry
+# DISABLE_TELEMETRY = True
+
+# E-mail, needed for password reset and new user registration
+# EMAIL_HOST = "smtp.example.org"
+# EMAIL_PORT = 465
+# EMAIL_USE_SSL = True
+# EMAIL_HOST_USER = ""
+# EMAIL_HOST_PASSWORD = ""
+# DEFAULT_FROM_EMAIL = "gramps@example.org"
+EOF
+
+chown root:gramps-web "$basedir/config.cfg" && chmod 0640 "$basedir/config.cfg" \
+    || { echo "ERROR: setting permissions on config.cfg failed"; exit 1; }
+echo "Created $basedir/config.cfg"

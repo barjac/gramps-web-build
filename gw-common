@@ -1,0 +1,102 @@
+# Shared functions for gramps-web-build and gramps-web-update
+# Sourced, not run.
+
+CFGFILE="$HOME/.gramps-web-build.cfg"
+
+run_as_root() {
+    if [ $# -eq 0 ]; then
+        echo "run_as_root: No command provided." >&2
+        return 1
+    fi
+
+    # Join arguments safely into a single command string
+    local CMD="$*"
+
+    if command -v sudo >/dev/null 2>&1; then
+        if sudo -n true 2>/dev/null; then
+            echo "Running as root via sudo"
+            sudo bash -c "$CMD"
+            return $?
+        elif sudo -v >/dev/null 2>&1; then
+            echo "Running as root via sudo (with password prompt)"
+            sudo bash -c "$CMD"
+            return $?
+        fi
+    fi
+
+    if command -v su >/dev/null 2>&1; then
+        echo "Running as root via su"
+        su -c "$CMD"
+        return $?
+    fi
+
+    echo "Unable to gain root access via sudo or su." >&2
+    return 1
+}
+
+# get_cfg key default - read key= from the cfg file (comments ignored)
+get_cfg() {
+    local val=""
+    [[ -f $CFGFILE ]] && val=$(grep -v '^[#]' "$CFGFILE" | grep "^$1=" | tail -1 | cut -d= -f2-)
+    echo "${val:-$2}"
+}
+
+# set_cfg key value - add or replace key= in the cfg file
+set_cfg() {
+    if grep -q "^$1=" "$CFGFILE" 2>/dev/null; then
+        sed -i "s|^$1=.*|$1=$2|" "$CFGFILE"
+    else
+        echo "$1=$2" >> "$CFGFILE"
+    fi
+}
+
+# Load settings, creating the cfg file with defaults on first run
+load_cfg() {
+    if ! [[ -f $CFGFILE ]]; then
+        cat > "$CFGFILE" <<EOF
+# gramps-web-build settings
+# basedir    - where venv, frontend, config and data live
+# servername - host name of the Apache vhost, e.g. gramps.example.org
+# port       - local port gunicorn listens on (127.0.0.1 only)
+# workers    - number of gunicorn worker processes
+# webapi_version / frontend_version - pin versions, empty = latest
+basedir=/srv/gramps-web
+port=5000
+workers=2
+webapi_version=
+frontend_version=
+EOF
+    fi
+    basedir=$(get_cfg basedir /srv/gramps-web)
+    servername=$(get_cfg servername "")
+    port=$(get_cfg port 5000)
+    workers=$(get_cfg workers 2)
+    webapi_version=$(get_cfg webapi_version "")
+    frontend_version=$(get_cfg frontend_version "")
+
+    # Values are passed to root via a command string, so keep them simple
+    [[ $basedir =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "ERROR: basedir '$basedir' in $CFGFILE is not a plain absolute path"; exit 1; }
+    [[ -z $servername || $servername =~ ^[A-Za-z0-9.-]+$ ]] || { echo "ERROR: servername '$servername' in $CFGFILE is not a valid host name"; exit 1; }
+    [[ $port =~ ^[0-9]+$ ]] || { echo "ERROR: port '$port' in $CFGFILE is not a number"; exit 1; }
+    [[ $workers =~ ^[0-9]+$ ]] || { echo "ERROR: workers '$workers' in $CFGFILE is not a number"; exit 1; }
+    [[ $webapi_version =~ ^[0-9.]*$ ]] || { echo "ERROR: webapi_version '$webapi_version' in $CFGFILE is not a version"; exit 1; }
+    [[ $frontend_version =~ ^v?[0-9.]*$ ]] || { echo "ERROR: frontend_version '$frontend_version' in $CFGFILE is not a version"; exit 1; }
+}
+
+# Self-update from the git remote, if this clone has one
+self_update() {
+    local script=$1; shift
+    if ! git rev-parse --abbrev-ref --symbolic-full-name '@{u}' >/dev/null 2>&1; then
+        echo "No upstream branch set for this clone - skipping self-update"
+        return 0
+    fi
+    echo -e "Checking for updates to gramps-web-build project...\n"
+    if LC_ALL=C git pull --ff-only | grep -q -v "Already up to date"; then
+        echo "Updated to newer gramps-web-build."
+        echo "Releasing lock"
+        flock -u 9 || { echo "Failed to release lock"; exit 1; }
+        echo "Restarting now: $(date)"
+        exec "$RUN_DIR/$script" --restart "$@"
+    fi
+    echo "Project is up to date"
+}

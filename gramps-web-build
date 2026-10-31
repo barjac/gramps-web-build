@@ -1,0 +1,154 @@
+#!/bin/bash
+#set -x
+
+# This script installs Gramps Web (gramps-web-api backend + gramps-web frontend)
+# as a system service behind Apache, without Docker.
+# A log file for debugging is automatically generated in the project folder.
+
+# Basic sanity checks
+#================================
+
+# Check we are not root
+((UID)) || { echo "ERROR: You must NOT run $0 as root - aborting!"; exit 1; }
+
+# Get user name
+user="$(id -un)"
+
+# Check that this is a 64bit machine
+uname -m | grep -q "64" || { echo "ERROR: A 64bit system is needed"; exit 1; }
+
+# Set run directory to where this script lives
+RUN_DIR="$(dirname "$(readlink -f "$0")")"
+cd "$RUN_DIR" || { echo "Switch to RUN_DIR failed"; exit 1; }
+
+# Shared functions
+. "$RUN_DIR/gw-common" || { echo "ERROR: cannot read $RUN_DIR/gw-common"; exit 1; }
+
+# Set full path to log
+LOGFILE="$RUN_DIR/gramps-web-build.log"
+
+# Check not already running
+echo "Checking for another instance"
+exec 9>/tmp/gramps-web-build.lock
+flock -n 9 || { echo "Another instance is already running"; exit 1; }
+
+# Detect restart flag and strip it from args
+RESTARTING=false
+if [[ "$1" == "--restart" ]]; then
+    RESTARTING=true
+    shift
+    echo "--restart passed to script"
+fi
+
+# Only wipe log & write OS info on fresh run
+if ! $RESTARTING; then
+    cat /etc/os-release > "$LOGFILE"
+    locale >> "$LOGFILE"
+
+    exec > >(tee -a "$LOGFILE")
+    exec 2>&1
+fi
+
+echo " Script start: $(date)"
+
+# Check we are in a git clone
+[[ -d "$RUN_DIR/.git" ]] || { echo -e "ERROR: This does not look like a Git repo.\n\n \
+Please read the instructions in README.md carefully and try again."; exit 1; }
+
+# Check we can reach PyPI and GitHub
+curl -sfI https://pypi.org/ > /dev/null || { echo "Failed to reach pypi.org - check internet connection or DNS"; exit 1; }
+curl -sfI https://github.com/ > /dev/null || { echo "Failed to reach github.com - check internet connection or DNS"; exit 1; }
+
+self_update gramps-web-build "$@"
+
+# Read settings
+load_cfg
+if [[ -z $servername ]]; then
+    default_name="gramps.$(hostname -d 2>/dev/null)"
+    [[ $default_name == "gramps." ]] && default_name=gramps.localhost
+    read -rp "Host name for the Gramps Web site [$default_name]: " servername
+    servername=${servername:-$default_name}
+    [[ $servername =~ ^[A-Za-z0-9.-]+$ ]] || { echo "ERROR: '$servername' is not a valid host name"; exit 1; }
+    set_cfg servername "$servername"
+fi
+
+# Find out where we are
+. /etc/os-release
+clear
+echo "****************Welcome to gramps-web-build *****************"
+echo -e "\nHello ${user}, you seem to be using ${PRETTY_NAME}\n"
+echo -e "Installation will be made into ${basedir}"
+echo -e "Site will be http://${servername}/ (gunicorn on 127.0.0.1:${port})"
+echo -e "Settings are in $CFGFILE\n"
+
+# Refuse to overwrite an existing install - that is what gramps-web-update is for
+[[ -d "$basedir/venv" ]] && { echo "ERROR: $basedir/venv already exists - use gramps-web-update instead"; exit 1; }
+
+# Check the port is free
+ss -ltn "sport = :$port" | grep -q LISTEN && { echo "ERROR: something is already listening on port $port - change port= in $CFGFILE"; exit 1; }
+
+# Check we have space where basedir will go
+spacedir=$basedir
+until [[ -d $spacedir ]]; do spacedir=$(dirname "$spacedir"); done
+(( $(df -m --output=avail "$spacedir" | tail -1) > 1500 )) || { echo -e "ERROR: You need more than 1.5GB free disk space for $basedir.\nYou only have $(df -m --output=avail "$spacedir" | tail -1)MB"; exit 1; }
+
+# Install system deps
+echo "Enter the root password if requested to install system dependencies"
+case $ID in
+#=================================
+    mageia)
+    MGA_ID=$(echo "$VERSION_ID"|cut -d. -f1)
+    (( MGA_ID >= 10 )) || { echo "ERROR: Mageia 10 or later is needed (Gramps 6.0)"; exit 1; }
+    run_as_root "urpmi --auto --no-recommends gramps python3-gobject python3-cairo python3-icu \
+        python3-pillow python3-orjson poppler apache apache-mod_proxy curl tar" \
+        || { echo "Deps install failed"; exit 1; }
+    ;;
+#=================================
+    *)
+    echo "Sorry $PRETTY_NAME is not yet supported."
+    exit 0
+    ;;
+#=================================
+esac
+
+# Everything else as root in one go
+echo -e "\nEnter the root password if requested to install Gramps Web\n"
+run_as_root "set -e
+    getent passwd gramps-web >/dev/null || useradd --system --user-group --home-dir $basedir/data \
+        --no-create-home --shell /sbin/nologin --comment 'Gramps Web' gramps-web
+    install -d -m 0755 $basedir
+    $RUN_DIR/mk-backend $basedir '$webapi_version'
+    $RUN_DIR/mk-frontend $basedir '$frontend_version'
+    $RUN_DIR/mk-config $basedir $servername
+    $RUN_DIR/mk-service $basedir $port $workers
+    $RUN_DIR/mk-apache $servername $port
+    systemctl enable --now gramps-web
+    if systemctl -q is-active httpd; then
+        systemctl reload httpd
+    else
+        echo 'Apache was not running - starting it (not enabled at boot)'
+        systemctl start httpd
+    fi" || { echo "ERROR: Install failed, check for errors above"; exit 1; }
+
+# Wait for gunicorn to come up
+echo "Waiting for Gramps Web to start"
+for (( i=0; i<60; i++ )); do
+    curl -sf "http://127.0.0.1:$port/" > /dev/null && break
+    sleep 1
+done
+curl -sf "http://127.0.0.1:$port/" > /dev/null \
+    || { echo "ERROR: Gramps Web did not answer on port $port - see: journalctl -u gramps-web"; exit 1; }
+curl -sf -H "Host: $servername" "http://127.0.0.1/" > /dev/null \
+    || echo "WARNING: Apache did not proxy http://$servername/ - see /var/log/httpd/gramps-web_error_log"
+
+cd || exit 1
+echo -e "\n\n########### Install is complete \o/ ############\n
+Open http://${servername}/ in a browser and create the admin account.
+Then create a family tree from the admin settings.
+
+ - ${servername} must resolve to this machine (DNS or /etc/hosts on the clients).
+ - Service:  systemctl status gramps-web    Logs: journalctl -u gramps-web
+ - Config:   ${basedir}/config.cfg  (restart gramps-web after editing)
+ - CLI:      sudo ${basedir}/bin/gramps-web-cli --help
+ - Update:   ${RUN_DIR}/gramps-web-update
+ - For HTTPS add an SSL vhost (e.g. certbot --apache) and set BASE_URL to https:// in config.cfg\n"

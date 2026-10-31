@@ -1,0 +1,69 @@
+#!/bin/bash
+
+# Create the gramps-web systemd unit and the <basedir>/bin/gramps-web-cli wrapper
+# Usage (as root): mk-service <basedir> <port> <workers>
+
+((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
+basedir=$1
+port=$2
+workers=$3
+[[ -n $basedir && -n $port && -n $workers ]] || { echo "Usage: $0 <basedir> <port> <workers>"; exit 1; }
+umask 022
+
+# /home is hidden from the service unless basedir is under it
+protect_home=true
+[[ $basedir == /home/* ]] && protect_home=read-only
+
+cat > /etc/systemd/system/gramps-web.service <<EOF
+# Created by gramps-web-build - rerun mk-service rather than editing,
+# or put local changes in: systemctl edit gramps-web
+[Unit]
+Description=Gramps Web genealogy server
+After=network.target
+
+[Service]
+Type=notify
+NotifyAccess=main
+User=gramps-web
+Group=gramps-web
+WorkingDirectory=$basedir/app
+Environment=GRAMPS_API_CONFIG=$basedir/config.cfg
+Environment=GRAMPSHOME=$basedir/data
+Environment=GRAMPS_DATABASE_PATH=$basedir/data/grampsdb
+# Upgrade the user database schema if needed (needs alembic files in WorkingDirectory)
+ExecStartPre=$basedir/venv/bin/python -m gramps_webapi user migrate
+ExecStart=$basedir/venv/bin/gunicorn --workers $workers --bind 127.0.0.1:$port \\
+    --timeout 120 --limit-request-line 8190 --preload gramps_webapi.wsgi:app
+ExecReload=/bin/kill -HUP \$MAINPID
+Restart=on-failure
+RestartSec=5
+TimeoutStartSec=300
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=$protect_home
+ReadWritePaths=$basedir/data
+
+[Install]
+WantedBy=multi-user.target
+EOF
+
+systemctl daemon-reload || { echo "ERROR: systemctl daemon-reload failed"; exit 1; }
+
+# CLI wrapper with the same environment as the service
+install -d -m 0755 "$basedir/bin" || exit 1
+cat > "$basedir/bin/gramps-web-cli" <<EOF
+#!/bin/bash
+# Run the gramps_webapi command line as the gramps-web user, e.g.
+#   $basedir/bin/gramps-web-cli tree list
+#   $basedir/bin/gramps-web-cli search --tree <id> index-full
+((UID)) && { echo "Run as root (sudo)"; exit 1; }
+cd $basedir/app || exit 1
+exec runuser -u gramps-web -- env GRAMPS_API_CONFIG=$basedir/config.cfg \\
+    GRAMPSHOME=$basedir/data GRAMPS_DATABASE_PATH=$basedir/data/grampsdb HOME=$basedir/data \\
+    $basedir/venv/bin/python -m gramps_webapi "\$@"
+EOF
+chmod 0755 "$basedir/bin/gramps-web-cli" || exit 1
+
+echo "Created gramps-web.service and $basedir/bin/gramps-web-cli"

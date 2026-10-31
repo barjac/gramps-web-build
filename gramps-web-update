@@ -1,0 +1,87 @@
+#!/bin/bash
+#set -x
+
+# This script updates an existing Gramps Web install made by gramps-web-build:
+# backend (gramps-webapi) and frontend (gramps-web) to the latest, or pinned,
+# versions. Data, config.cfg and the Apache vhost are kept.
+
+# Check we are not root
+((UID)) || { echo "ERROR: You must NOT run $0 as root - aborting!"; exit 1; }
+
+# Set run directory to where this script lives
+RUN_DIR="$(dirname "$(readlink -f "$0")")"
+cd "$RUN_DIR" || { echo "Switch to RUN_DIR failed"; exit 1; }
+
+# Shared functions
+. "$RUN_DIR/gw-common" || { echo "ERROR: cannot read $RUN_DIR/gw-common"; exit 1; }
+
+LOGFILE="$RUN_DIR/gramps-web-update.log"
+
+# Check not already running (shares the lock with gramps-web-build)
+exec 9>/tmp/gramps-web-build.lock
+flock -n 9 || { echo "Another instance is already running"; exit 1; }
+
+RESTARTING=false
+if [[ "$1" == "--restart" ]]; then
+    RESTARTING=true
+    shift
+    echo "--restart passed to script"
+fi
+
+if ! $RESTARTING; then
+    cat /etc/os-release > "$LOGFILE"
+    locale >> "$LOGFILE"
+
+    exec > >(tee -a "$LOGFILE")
+    exec 2>&1
+fi
+
+echo " Script start: $(date)"
+
+curl -sfI https://pypi.org/ > /dev/null || { echo "Failed to reach pypi.org - check internet connection or DNS"; exit 1; }
+curl -sfI https://github.com/ > /dev/null || { echo "Failed to reach github.com - check internet connection or DNS"; exit 1; }
+
+self_update gramps-web-update "$@"
+
+[[ -f $CFGFILE ]] || { echo "ERROR: $CFGFILE not found - run gramps-web-build first"; exit 1; }
+load_cfg
+[[ -x $basedir/venv/bin/python ]] || { echo "ERROR: no install found in $basedir - run gramps-web-build first"; exit 1; }
+
+# Report what we have and what we will get
+cur_api=$("$basedir/venv/bin/python" -c 'import importlib.metadata as m; print(m.version("gramps-webapi"))' 2>/dev/null)
+cur_web=$(cat "$basedir/static/.grampsjs-version" 2>/dev/null)
+new_api=${webapi_version:-$(curl -sf https://pypi.org/pypi/gramps-webapi/json \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["info"]["version"])')}
+new_web=${frontend_version:-$(curl -sf https://api.github.com/repos/gramps-project/gramps-web/releases/latest \
+    | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])')}
+new_web=v${new_web#v}
+
+echo -e "\n gramps-webapi : ${cur_api:-unknown} -> $new_api"
+echo -e " gramps-web    : ${cur_web:-unknown} -> $new_web\n"
+
+if [[ $cur_api == "$new_api" && $cur_web == "$new_web" && $1 != "--force" ]]; then
+    echo "Already up to date (use --force to reinstall anyway)"
+    exit 0
+fi
+
+echo "Enter the root password if requested to update Gramps Web"
+run_as_root "set -e
+    systemctl stop gramps-web
+    $RUN_DIR/mk-backend $basedir '$new_api'
+    $RUN_DIR/mk-frontend $basedir '$new_web'
+    $RUN_DIR/mk-config $basedir $servername
+    $RUN_DIR/mk-service $basedir $port $workers
+    systemctl start gramps-web" \
+    || { echo "ERROR: Update failed - check errors above, then: systemctl start gramps-web"; exit 1; }
+
+echo "Waiting for Gramps Web to start"
+for (( i=0; i<60; i++ )); do
+    curl -sf "http://127.0.0.1:$port/" > /dev/null && break
+    sleep 1
+done
+curl -sf "http://127.0.0.1:$port/" > /dev/null \
+    || { echo "ERROR: Gramps Web did not answer on port $port - see: journalctl -u gramps-web"; exit 1; }
+
+echo -e "\n########### Update is complete \o/ ############\n
+gramps-webapi $new_api and gramps-web $new_web are running.
+Reload http://${servername}/ in the browser to pick up the new frontend.\n"

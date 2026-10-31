@@ -1,0 +1,63 @@
+#!/bin/bash
+
+# Create or upgrade the gramps-web-api venv in <basedir>/venv
+# and the matching user DB migration files in <basedir>/app.
+# Usage (as root): mk-backend <basedir> [version]   - empty version = latest
+
+((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
+basedir=$1
+version=$2
+[[ -n $basedir ]] || { echo "Usage: $0 <basedir> [version]"; exit 1; }
+umask 022
+
+venv=$basedir/venv
+py=$venv/bin/python
+
+# venv reuses Mageia's gramps and PyGObject
+if ! [[ -x $py ]]; then
+    echo "Creating venv in $venv"
+    python3 -m venv --system-site-packages "$venv" || { echo "ERROR: venv creation failed"; exit 1; }
+fi
+
+"$py" -m pip install --quiet --upgrade pip wheel || { echo "ERROR: pip upgrade failed"; exit 1; }
+
+echo "Installing gramps-webapi ${version:-(latest)}"
+"$py" -m pip install --upgrade --no-deps "gramps-webapi${version:+==$version}" \
+    || { echo "ERROR: gramps-webapi install failed"; exit 1; }
+
+# gramps-webapi caps PyGObject at 3.50 for upstream's Docker base; Mageia's newer
+# PyGObject is what its gramps package uses, so install the deps without that cap.
+reqs=$venv/gramps-webapi-requirements.txt
+"$py" - > "$reqs" <<'EOF' || { echo "ERROR: reading gramps-webapi requirements failed"; exit 1; }
+import importlib.metadata as m
+import re
+for req in m.requires("gramps-webapi"):
+    if ";" in req:  # extras such as ai, face, test
+        continue
+    if re.match(r"pygobject\b", req, re.I):
+        req = "PyGObject"
+    print(req)
+EOF
+echo "Installing gramps-webapi dependencies"
+"$py" -m pip install --upgrade-strategy only-if-needed -r "$reqs" gunicorn \
+    || { echo "ERROR: dependency install failed"; exit 1; }
+
+# The wheel lacks the alembic files needed by 'user migrate' - take them from the sdist
+installed=$("$py" -c 'import importlib.metadata as m; print(m.version("gramps-webapi"))') \
+    || { echo "ERROR: gramps-webapi not importable"; exit 1; }
+sdist_url=$(curl -sf "https://pypi.org/pypi/gramps-webapi/$installed/json" | "$py" -c \
+    'import json,sys; print(next(u["url"] for u in json.load(sys.stdin)["urls"] if u["packagetype"]=="sdist"))') \
+    || { echo "ERROR: cannot find sdist for gramps-webapi $installed"; exit 1; }
+
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+echo "Fetching migration files from $sdist_url"
+curl -sfL "$sdist_url" | tar xz -C "$tmp" --strip-components=1 --wildcards '*/alembic.ini' '*/alembic_users' \
+    || { echo "ERROR: sdist download/extract failed"; exit 1; }
+rm -rf "$basedir/app.new"
+mkdir -p "$basedir/app.new" || exit 1
+mv "$tmp/alembic.ini" "$tmp/alembic_users" "$basedir/app.new/" || exit 1
+rm -rf "$basedir/app"
+mv "$basedir/app.new" "$basedir/app" || { echo "ERROR: installing $basedir/app failed"; exit 1; }
+
+echo "gramps-webapi $installed installed"

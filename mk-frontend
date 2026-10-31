@@ -1,0 +1,36 @@
+#!/bin/bash
+
+# Install the prebuilt gramps-web frontend release into <basedir>/static
+# Usage (as root): mk-frontend <basedir> [version]   - empty version = latest
+
+((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
+basedir=$1
+version=$2
+[[ -n $basedir ]] || { echo "Usage: $0 <basedir> [version]"; exit 1; }
+umask 022
+
+if [[ -n $version ]]; then
+    tag=v${version#v}
+else
+    tag=$(curl -sf https://api.github.com/repos/gramps-project/gramps-web/releases/latest \
+        | python3 -c 'import json,sys; print(json.load(sys.stdin)["tag_name"])') \
+        || { echo "ERROR: cannot find latest gramps-web release"; exit 1; }
+fi
+
+url=https://github.com/gramps-project/gramps-web/releases/download/$tag/grampsjs-$tag.tar.gz
+tmp=$(mktemp -d) || exit 1
+trap 'rm -rf "$tmp"' EXIT
+echo "Downloading frontend $tag"
+curl -sfL "$url" | tar xz -C "$tmp" || { echo "ERROR: download/extract of $url failed"; exit 1; }
+[[ -f $tmp/grampsjs-$tag/index.html ]] || { echo "ERROR: unexpected layout in grampsjs-$tag.tar.gz"; exit 1; }
+echo "$tag" > "$tmp/grampsjs-$tag/.grampsjs-version"
+
+# Swap in the new frontend
+rm -rf "$basedir/static.new" "$basedir/static.old"
+mv "$tmp/grampsjs-$tag" "$basedir/static.new" || exit 1
+chmod -R u=rwX,go=rX "$basedir/static.new"
+[[ -d $basedir/static ]] && { mv "$basedir/static" "$basedir/static.old" || exit 1; }
+mv "$basedir/static.new" "$basedir/static" || { echo "ERROR: installing $basedir/static failed"; exit 1; }
+rm -rf "$basedir/static.old"
+
+echo "Frontend $tag installed"
