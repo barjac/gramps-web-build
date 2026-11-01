@@ -84,6 +84,7 @@ Back up `<basedir>/data/` and `<basedir>/config.cfg`.
 |---|---|---|
 | `gramps-web-build` | user | first install |
 | `gramps-web-update` | user | upgrade |
+| `gramps-web-passwd <user> [basedir]` | root | set a user's password (forgotten password, no SMTP) |
 | `mk-backend <basedir> [ver]` | root | venv + gramps-webapi + alembic files |
 | `mk-frontend <basedir> [ver]` | root | frontend release into `static/` |
 | `mk-config <basedir> <name>` | root | data dirs + `config.cfg` (kept if present) |

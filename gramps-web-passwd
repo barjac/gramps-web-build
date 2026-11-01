@@ -1,0 +1,38 @@
+#!/bin/bash
+
+# Set a Gramps Web user's password, e.g. when it has been forgotten.
+# The web UI needs the old password to change it, and the reset e-mail
+# needs SMTP, so this sets it directly in the user database.
+# Usage (as root): gramps-web-passwd <username> [basedir]
+
+((UID)) && { echo "ERROR: $0 must be run as root (sudo)"; exit 1; }
+username=$1
+basedir=${2:-/srv/gramps-web}
+[[ -n $username ]] || { echo "Usage: $0 <username> [basedir]"; exit 1; }
+[[ -x $basedir/venv/bin/python ]] || { echo "ERROR: no Gramps Web install found in $basedir"; exit 1; }
+
+read -rsp "New password for $username: " pw1; echo
+read -rsp "Repeat new password: " pw2; echo
+[[ $pw1 == "$pw2" ]] || { echo "ERROR: passwords do not match - nothing changed"; exit 1; }
+[[ -n $pw1 ]] || { echo "ERROR: empty password - nothing changed"; exit 1; }
+[[ $pw1 =~ ^[[:space:]]|[[:space:]]$ ]] && echo "WARNING: password starts or ends with a space"
+
+# Username is passed as an argument, the password on stdin (not visible in ps)
+py='
+import sys, warnings
+warnings.filterwarnings("ignore")
+from gramps_webapi.app import create_app
+from gramps_webapi.auth import modify_user
+name = sys.argv[1]
+app = create_app()
+with app.app_context():
+    try:
+        modify_user(name, password=sys.stdin.read())
+    except Exception as e:
+        sys.exit(f"ERROR: could not set password for {name!r}: {e}")
+print(f"Password changed for {name}")
+'
+cd "$basedir/app" || exit 1
+printf '%s' "$pw1" | runuser -u gramps-web -- env GRAMPS_API_CONFIG="$basedir/config.cfg" \
+    GRAMPSHOME="$basedir/data" GRAMPS_DATABASE_PATH="$basedir/data/grampsdb" HOME="$basedir/data" \
+    "$basedir/venv/bin/python" -c "$py" "$username"
