@@ -146,6 +146,9 @@ echo -e "\n\n########### Install is complete \o/ ############\n
 Open http://${servername}/ in a browser and create the admin account.
 To load an existing tree: Settings -> Administration -> Data -> Import Family Tree.
 
+ - User guide: https://www.grampsweb.org/user-guide/
+ - Admin docs: https://www.grampsweb.org/administration/admin/
+
  - ${servername} must resolve to this machine (DNS or /etc/hosts on the clients).
  - Service:  systemctl status gramps-web    Logs: journalctl -u gramps-web
  - Config:   ${basedir}/config.cfg  (restart gramps-web after editing)

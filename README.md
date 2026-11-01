@@ -26,6 +26,11 @@ su) when it needs it. The first run asks for the site's host name (e.g.
 name at the server in DNS or in `/etc/hosts` on the clients, then open
 `http://<host name>/` and create the admin account.
 
+The app has no built-in help. Documentation is on the Gramps Web site:
+
+- User guide: https://www.grampsweb.org/user-guide/
+- Administration (users, roles, trees): https://www.grampsweb.org/administration/admin/
+
 ## Update
 
 ```
