@@ -62,6 +62,7 @@ are kept. The user database schema is migrated each time the service starts.
 | `<basedir>/config.cfg` | root:gramps-web 0640 | Gramps Web API config, holds `SECRET_KEY` |
 | `<basedir>/bin/gramps-web-cli` | root | runs `python -m gramps_webapi` as gramps-web |
 | `<basedir>/data/` | gramps-web | trees, media, users, search index, caches, backups |
+| `<basedir>/data/gramps/gramps60/plugins/` | root | Gramps addons FilterRules and JSON |
 | `/etc/systemd/system/gramps-web.service` | | the service |
 | `/etc/httpd/conf/sites.d/gramps-web.conf` | | Apache vhost on port 80 |
 
@@ -88,5 +89,6 @@ Back up `<basedir>/data/` and `<basedir>/config.cfg`.
 | `mk-backend <basedir> [ver]` | root | venv + gramps-webapi + alembic files |
 | `mk-frontend <basedir> [ver]` | root | frontend release into `static/` |
 | `mk-config <basedir> <name>` | root | data dirs + `config.cfg` (kept if present) |
+| `mk-addons <basedir>` | root | Gramps addons (FilterRules is needed by the Relationship Graph) |
 | `mk-service <basedir> <port> <workers>` | root | systemd unit + CLI wrapper |
 | `mk-apache <name> <port>` | root | Apache vhost (kept if present) |

@@ -70,6 +70,7 @@ run_as_root "set -e
     $RUN_DIR/mk-backend $basedir '$new_api'
     $RUN_DIR/mk-frontend $basedir '$new_web'
     $RUN_DIR/mk-config $basedir $servername
+    $RUN_DIR/mk-addons $basedir
     $RUN_DIR/mk-service $basedir $port $workers
     systemctl start gramps-web" \
     || { echo "ERROR: Update failed - check errors above, then: systemctl start gramps-web"; exit 1; }

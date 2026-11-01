@@ -120,6 +120,7 @@ run_as_root "set -e
     $RUN_DIR/mk-backend $basedir '$webapi_version'
     $RUN_DIR/mk-frontend $basedir '$frontend_version'
     $RUN_DIR/mk-config $basedir $servername
+    $RUN_DIR/mk-addons $basedir
     $RUN_DIR/mk-service $basedir $port $workers
     $RUN_DIR/mk-apache $servername $port
     systemctl enable --now gramps-web
