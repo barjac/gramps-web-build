@@ -62,11 +62,16 @@ are kept. The user database schema is migrated each time the service starts.
 | `<basedir>/config.cfg` | root:gramps-web 0640 | Gramps Web API config, holds `SECRET_KEY` |
 | `<basedir>/bin/gramps-web-cli` | root | runs `python -m gramps_webapi` as gramps-web |
 | `<basedir>/data/` | gramps-web | trees, media, users, search index, caches, backups |
+| `<basedir>/data/backup/<tree-id>/` | gramps-web | backups made in the web UI, `<uuid>.tar`, newest 5 kept per tree |
 | `<basedir>/data/gramps/gramps60/plugins/` | root | Gramps addons FilterRules and JSON |
 | `/etc/systemd/system/gramps-web.service` | | the service |
 | `/etc/httpd/conf/sites.d/gramps-web.conf` | | Apache vhost on port 80 |
 
 Back up `<basedir>/data/` and `<basedir>/config.cfg`.
+
+`<basedir>/data/` is readable only by gramps-web, so list or copy backups as
+root, e.g. `ls -lR <basedir>/data/backup`. `<tree-id>` is the tree's directory
+name, not the name shown in the web UI.
 
 ## Notes
 
