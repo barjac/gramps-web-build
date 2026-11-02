@@ -1,10 +1,20 @@
 # gramps-web-build
 
-Installs [Gramps Web](https://www.grampsweb.org/) on Mageia 10 as a system
-service behind Apache, without Docker.
+Installs [Gramps Web](https://www.grampsweb.org/) as a system service behind
+Apache, without Docker, on:
 
-- Backend: `gramps-webapi` from PyPI in a venv that reuses Mageia's `gramps`
-  and `python3-gobject` packages, run by gunicorn on `127.0.0.1:5000`.
+- Mageia 10
+- Debian 13 (and LMDE 7)
+- Ubuntu 24.04 or later
+- Linux Mint 22 or later (on Ubuntu/Mint the `universe` component must be enabled)
+
+Details:
+
+- Backend: `gramps-webapi` from PyPI in a venv, run by gunicorn on
+  `127.0.0.1:5000`. The venv reuses the distro's PyGObject, cairo and ICU
+  packages. On Mageia it also reuses the distro's `gramps`. Debian, Ubuntu and
+  Mint ship a Gramps too old for gramps-webapi (it needs 6.0.4 or later), so
+  there Gramps 6.0.x comes from PyPI, as in upstream's Docker image.
 - Frontend: the prebuilt `grampsjs-vX.Y.Z.tar.gz` release from GitHub (no Node).
 - Storage: SQLite for family trees, users and the search index.
 - No Celery/Redis: background tasks run inline.
@@ -65,7 +75,8 @@ are kept. The user database schema is migrated each time the service starts.
 | `<basedir>/data/backup/<tree-id>/` | gramps-web | backups made in the web UI, `<uuid>.tar`, newest 5 kept per tree |
 | `<basedir>/data/gramps/gramps60/plugins/` | root | Gramps addons FilterRules and JSON |
 | `/etc/systemd/system/gramps-web.service` | | the service |
-| `/etc/httpd/conf/sites.d/gramps-web.conf` | | Apache vhost on port 80 |
+| `/etc/httpd/conf/sites.d/gramps-web.conf` | | Apache vhost on port 80 (Mageia) |
+| `/etc/apache2/sites-available/gramps-web.conf` | | Apache vhost on port 80 (Debian, Ubuntu, Mint), enabled with `a2ensite` |
 
 Back up `<basedir>/data/` and `<basedir>/config.cfg`.
 
@@ -79,10 +90,13 @@ name, not the name shown in the web UI.
   in `config.cfg` to `https://`. Set `X-Forwarded-Proto "https"` in that vhost.
 - **E-mail** (password reset, registration): fill in the `EMAIL_*` lines in
   `config.cfg`.
-- **PyGObject:** gramps-webapi caps PyGObject at 3.50, but Mageia ships a newer
-  one. `mk-backend` installs the dependencies without that cap.
-- Optional extras not installed: `tesseract` (OCR), `ffmpeg` (video thumbnails),
-  AI chat and face detection.
+- **PyGObject:** gramps-webapi caps PyGObject at 3.50, but Mageia and Ubuntu
+  26.04 ship newer ones. `mk-backend` installs the dependencies without that
+  cap. pip then reports a conflict with the cap; that is expected.
+- **Media:** `ffmpeg` (video thumbnails), `tesseract` with English (OCR) and
+  Poppler (PDF thumbnails) are installed. For other OCR languages install
+  e.g. `tesseract-deu` (Mageia) or `tesseract-ocr-deu` (Debian family).
+- Not installed: AI chat and face detection.
 
 ## Scripts
 

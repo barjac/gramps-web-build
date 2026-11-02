@@ -105,12 +105,34 @@ case $ID in
         || { echo "Deps install failed"; exit 1; }
     ;;
 #=================================
+    debian|ubuntu|linuxmint)
+    # Gramps comes from PyPI here (Debian 13 and Ubuntu 24.04 ship one too old
+    # for gramps-webapi); the distro supplies PyGObject, cairo, ICU and typelibs.
+    MAJOR=$(echo "$VERSION_ID"|cut -d. -f1)
+    case $ID in
+        debian)    min=13 ;;
+        ubuntu)    min=24 ;;
+        linuxmint) min=22; [[ $ID_LIKE == *ubuntu* ]] || min=7 ;;   # LMDE 7 = Debian 13
+    esac
+    # Debian testing/sid have no VERSION_ID
+    [[ -z $MAJOR ]] || (( MAJOR >= min )) || { echo "ERROR: $PRETTY_NAME is too old - version $min or later is needed"; exit 1; }
+    run_as_root "export DEBIAN_FRONTEND=noninteractive
+        apt-get update && apt-get install -y --no-install-recommends python3 python3-venv \
+        python3-gi python3-gi-cairo python3-cairo python3-icu \
+        gir1.2-gtk-3.0 gir1.2-pango-1.0 gir1.2-gexiv2-0.10 gir1.2-osmgpsmap-1.0 \
+        graphviz poppler-utils ffmpeg tesseract-ocr tesseract-ocr-osd fonts-dejavu-core \
+        apache2 curl ca-certificates tar" \
+        || { echo "Deps install failed (on Ubuntu/Mint the universe component must be enabled)"; exit 1; }
+    ;;
+#=================================
     *)
     echo "Sorry $PRETTY_NAME is not yet supported."
     exit 0
     ;;
 #=================================
 esac
+
+apache_layout || exit 1
 
 # Everything else as root in one go
 echo -e "\nEnter the root password if requested to install Gramps Web\n"
@@ -125,11 +147,11 @@ run_as_root "set -e
     $RUN_DIR/mk-service $basedir $port $workers
     $RUN_DIR/mk-apache $servername $port
     systemctl enable --now gramps-web
-    if systemctl -q is-active httpd; then
-        systemctl reload httpd
+    if systemctl -q is-active $apache_svc; then
+        systemctl reload $apache_svc
     else
         echo 'Apache was not running - starting it (not enabled at boot)'
-        systemctl start httpd
+        systemctl start $apache_svc
     fi" || { echo "ERROR: Install failed, check for errors above"; exit 1; }
 
 # Wait for gunicorn to come up
@@ -141,7 +163,7 @@ done
 curl -sf "http://127.0.0.1:$port/" > /dev/null \
     || { echo "ERROR: Gramps Web did not answer on port $port - see: journalctl -u gramps-web"; exit 1; }
 curl -sf -H "Host: $servername" "http://127.0.0.1/" > /dev/null \
-    || echo "WARNING: Apache did not proxy http://$servername/ - see /var/log/httpd/gramps-web_error_log"
+    || echo "WARNING: Apache did not proxy http://$servername/ - see $apache_errlog"
 
 cd || exit 1
 echo -e "\n\n########### Install is complete \o/ ############\n

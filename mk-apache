@@ -9,14 +9,22 @@ servername=$1
 port=$2
 [[ -n $servername && -n $port ]] || { echo "Usage: $0 <servername> <port>"; exit 1; }
 
-sites=/etc/httpd/conf/sites.d
-conf=$sites/gramps-web.conf
-[[ -d $sites ]] || { echo "ERROR: $sites not found - is apache installed?"; exit 1; }
+. "$(dirname "$(readlink -f "$0")")/gw-common" || { echo "ERROR: cannot read gw-common"; exit 1; }
+apache_layout || exit 1
+conf=$apache_sites/gramps-web.conf
 
 # Without a default vhost the first vhost catches every unmatched name,
 # which would hijack the server's existing site (e.g. ZoneMinder)
-[[ -f $sites/00_default_vhosts.conf ]] \
-    || echo "WARNING: $sites/00_default_vhosts.conf missing - gramps-web.conf may become the default site"
+case $apache_svc in
+    httpd)
+    [[ -f $apache_sites/00_default_vhosts.conf ]] \
+        || echo "WARNING: $apache_sites/00_default_vhosts.conf missing - gramps-web.conf may become the default site"
+    ;;
+    apache2)
+    [[ -e /etc/apache2/sites-enabled/000-default.conf ]] \
+        || echo "WARNING: site 000-default is not enabled - gramps-web may become the default site"
+    ;;
+esac
 
 if [[ -f $conf ]]; then
     echo "Keeping existing $conf"
@@ -32,11 +40,17 @@ else
     ProxyPass        / http://127.0.0.1:$port/
     ProxyPassReverse / http://127.0.0.1:$port/
 
-    ErrorLog logs/gramps-web_error_log
-    CustomLog logs/gramps-web_access_log combined
+    ErrorLog $apache_errlog
+    CustomLog $apache_acclog combined
 </VirtualHost>
 EOF
     echo "Created $conf"
+fi
+
+# Debian-style Apache loads only enabled modules and sites
+if [[ $apache_svc == apache2 ]]; then
+    a2enmod -q proxy proxy_http headers || { echo "ERROR: a2enmod failed"; exit 1; }
+    a2ensite -q gramps-web || { echo "ERROR: a2ensite gramps-web failed"; exit 1; }
 fi
 
 apachectl configtest || { echo "ERROR: Apache config test failed"; exit 1; }

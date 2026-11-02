@@ -13,7 +13,8 @@ umask 022
 venv=$basedir/venv
 py=$venv/bin/python
 
-# venv reuses Mageia's gramps and PyGObject
+# venv reuses the distro's PyGObject, cairo and ICU, and its gramps where that
+# is new enough (Mageia); otherwise pip installs gramps from PyPI (Debian family)
 if ! [[ -x $py ]]; then
     echo "Creating venv in $venv"
     python3 -m venv --system-site-packages "$venv" || { echo "ERROR: venv creation failed"; exit 1; }
@@ -39,6 +40,7 @@ for req in m.requires("gramps-webapi"):
     print(req)
 EOF
 echo "Installing gramps-webapi dependencies"
+echo "(pip may report that gramps-webapi requires PyGObject<=3.50.0 - that is expected and harmless)"
 "$py" -m pip install --upgrade-strategy only-if-needed -r "$reqs" gunicorn \
     || { echo "ERROR: dependency install failed"; exit 1; }
 
@@ -61,3 +63,4 @@ rm -rf "$basedir/app"
 mv "$basedir/app.new" "$basedir/app" || { echo "ERROR: installing $basedir/app failed"; exit 1; }
 
 echo "gramps-webapi $installed installed"
+"$py" -c 'import gramps; from gramps.version import VERSION; print("Using Gramps", VERSION, "from", gramps.__path__[0])'

@@ -83,6 +83,26 @@ EOF
     [[ $frontend_version =~ ^v?[0-9.]*$ ]] || { echo "ERROR: frontend_version '$frontend_version' in $CFGFILE is not a version"; exit 1; }
 }
 
+# apache_layout - set the Apache service name, vhost dir and log files
+# for this distro. Call after Apache is installed.
+apache_layout() {
+    if [[ -d /etc/apache2/sites-available ]]; then      # Debian, Ubuntu, Mint
+        apache_svc=apache2
+        apache_sites=/etc/apache2/sites-available
+        # logrotate only rotates *.log here
+        apache_errlog=/var/log/apache2/gramps-web_error.log
+        apache_acclog=/var/log/apache2/gramps-web_access.log
+    elif [[ -d /etc/httpd/conf/sites.d ]]; then         # Mageia
+        apache_svc=httpd
+        apache_sites=/etc/httpd/conf/sites.d
+        apache_errlog=/var/log/httpd/gramps-web_error_log
+        apache_acclog=/var/log/httpd/gramps-web_access_log
+    else
+        echo "ERROR: no Apache vhost directory found - is Apache installed?" >&2
+        return 1
+    fi
+}
+
 # Self-update from the git remote, if this clone has one
 self_update() {
     local script=$1; shift
