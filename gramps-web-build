@@ -100,7 +100,8 @@ case $ID in
     MGA_ID=$(echo "$VERSION_ID"|cut -d. -f1)
     (( MGA_ID >= 10 )) || { echo "ERROR: Mageia 10 or later is needed (Gramps 6.0)"; exit 1; }
     run_as_root "urpmi --auto --no-recommends gramps python3-gobject python3-cairo python3-icu \
-        python3-pillow python3-orjson poppler apache apache-mod_proxy curl tar" \
+        python3-pillow python3-orjson poppler ffmpeg tesseract tesseract-osd \
+        apache apache-mod_proxy curl tar" \
         || { echo "Deps install failed"; exit 1; }
     ;;
 #=================================
