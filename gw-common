@@ -50,6 +50,12 @@ set_cfg() {
     fi
 }
 
+# valid_hostname name - DNS labels joined by dots, the last one starting with a
+# letter: Apache rejects names like gramps.1 that end in digits (400 Bad Request)
+valid_hostname() {
+    [[ $1 =~ ^([A-Za-z0-9]([A-Za-z0-9-]*[A-Za-z0-9])?\.)*[A-Za-z]([A-Za-z0-9-]*[A-Za-z0-9])?$ ]]
+}
+
 # Load settings, creating the cfg file with defaults on first run
 load_cfg() {
     if ! [[ -f $CFGFILE ]]; then
@@ -76,7 +82,7 @@ EOF
 
     # Values are passed to root via a command string, so keep them simple
     [[ $basedir =~ ^/[A-Za-z0-9._/-]+$ ]] || { echo "ERROR: basedir '$basedir' in $CFGFILE is not a plain absolute path"; exit 1; }
-    [[ -z $servername || $servername =~ ^[A-Za-z0-9.-]+$ ]] || { echo "ERROR: servername '$servername' in $CFGFILE is not a valid host name"; exit 1; }
+    [[ -z $servername ]] || valid_hostname "$servername" || { echo "ERROR: servername '$servername' in $CFGFILE is not a valid host name"; exit 1; }
     [[ $port =~ ^[0-9]+$ ]] || { echo "ERROR: port '$port' in $CFGFILE is not a number"; exit 1; }
     [[ $workers =~ ^[0-9]+$ ]] || { echo "ERROR: workers '$workers' in $CFGFILE is not a number"; exit 1; }
     [[ $webapi_version =~ ^[0-9.]*$ ]] || { echo "ERROR: webapi_version '$webapi_version' in $CFGFILE is not a version"; exit 1; }

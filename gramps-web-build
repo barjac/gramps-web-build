@@ -64,11 +64,14 @@ self_update gramps-web-build "$@"
 # Read settings
 load_cfg
 if [[ -z $servername ]]; then
+    # gramps.<domain> if this machine has a usable domain, else gramps.localhost
     default_name="gramps.$(hostname -d 2>/dev/null)"
-    [[ $default_name == "gramps." ]] && default_name=gramps.localhost
+    valid_hostname "$default_name" || default_name=gramps.localhost
+    echo "The site needs a host name of its own, e.g. gramps.example.org or gramps.lan."
+    echo "gramps.localhost works without DNS, but only in a browser on this machine."
     read -rp "Host name for the Gramps Web site [$default_name]: " servername
     servername=${servername:-$default_name}
-    [[ $servername =~ ^[A-Za-z0-9.-]+$ ]] || { echo "ERROR: '$servername' is not a valid host name"; exit 1; }
+    valid_hostname "$servername" || { echo "ERROR: '$servername' is not a valid host name (it must not end in digits, e.g. gramps.1)"; exit 1; }
     set_cfg servername "$servername"
 fi
 
@@ -165,6 +168,16 @@ curl -sf "http://127.0.0.1:$port/" > /dev/null \
 curl -sf -H "Host: $servername" "http://127.0.0.1/" > /dev/null \
     || echo "WARNING: Apache did not proxy http://$servername/ - see $apache_errlog"
 
+# The site is only reachable by name - say how to make the name resolve
+if [[ $servername == *.localhost ]]; then
+    hosts_note="NOTE: ${servername} only works in a browser on this machine."
+elif ! getent hosts "$servername" > /dev/null; then
+    ip=$(hostname -I 2>/dev/null | awk '{print $1}')
+    hosts_note="NOTE: ${servername} does not resolve yet. Add it to your DNS, or add this
+line to /etc/hosts on each machine whose browser should open it (this one too):
+    ${ip:-<IP of this machine>}  ${servername}"
+fi
+
 cd || exit 1
 echo -e "\n\n########### Install is complete \o/ ############\n
 Open http://${servername}/ in a browser and create the admin account.
@@ -179,3 +192,6 @@ To load an existing tree: Settings -> Administration -> Data -> Import Family Tr
  - CLI:      sudo ${basedir}/bin/gramps-web-cli --help
  - Update:   ${RUN_DIR}/gramps-web-update
  - For HTTPS add an SSL vhost (e.g. certbot --apache) and set BASE_URL to https:// in config.cfg\n"
+if [[ -n $hosts_note ]]; then
+    echo -e "${hosts_note}\n"
+fi
