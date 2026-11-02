@@ -130,6 +130,8 @@ case $ID in
 #=================================
     *)
     echo "Sorry $PRETTY_NAME is not yet supported."
+    echo "Supported: Mageia 10, Debian 13, Ubuntu 24.04+, Linux Mint 22+,"
+    echo "           Raspberry Pi OS 64-bit (trixie) - see README.md"
     exit 0
     ;;
 #=================================

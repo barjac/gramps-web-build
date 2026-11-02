@@ -26,8 +26,8 @@ echo "Installing gramps-webapi ${version:-(latest)}"
 "$py" -m pip install --upgrade --no-deps "gramps-webapi${version:+==$version}" \
     || { echo "ERROR: gramps-webapi install failed"; exit 1; }
 
-# gramps-webapi caps PyGObject at 3.50 for upstream's Docker base; Mageia's newer
-# PyGObject is what its gramps package uses, so install the deps without that cap.
+# gramps-webapi caps PyGObject at 3.50 for upstream's Docker base; the venv uses
+# the distro's PyGObject (newer on Mageia, Ubuntu 26.04), so drop that cap.
 reqs=$venv/gramps-webapi-requirements.txt
 "$py" - > "$reqs" <<'EOF' || { echo "ERROR: reading gramps-webapi requirements failed"; exit 1; }
 import importlib.metadata as m
