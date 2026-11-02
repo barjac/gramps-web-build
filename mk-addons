@@ -5,6 +5,7 @@
 #  - FilterRules: extra filter rules, e.g. DegreesOfSeparation (Relationship Graph)
 #  - JSON:        JSON import/export format
 # Existing copies are replaced by the current release from the addons repo.
+# Restart gramps-web afterwards: workers load addons once, at first use.
 # Usage (as root): mk-addons <basedir>
 
 ((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
@@ -43,3 +44,10 @@ for addon in $addons; do
 done
 
 echo "Gramps addons installed in $plugins: $addons"
+
+# Cached API responses never expire until the tree changes, so answers given
+# without these addons (e.g. 404 for an unknown filter rule) would be served on
+if [[ -d $data/cache/request ]]; then
+    find "$data/cache/request" -type f -delete || { echo "ERROR: clearing $data/cache/request failed"; exit 1; }
+    echo "Cleared the request cache"
+fi
