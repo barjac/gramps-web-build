@@ -5,7 +5,7 @@
 #  - FilterRules: extra filter rules, e.g. DegreesOfSeparation (Relationship Graph)
 #  - JSON:        JSON import/export format
 # Existing copies are replaced by the current release from the addons repo.
-# Restart gramps-web afterwards: workers load addons once, at first use.
+# A running gramps-web is restarted, as workers load addons once.
 # Usage (as root): mk-addons <basedir>
 
 ((UID)) && { echo "ERROR: $0 must be run as root"; exit 1; }
@@ -45,8 +45,13 @@ done
 
 echo "Gramps addons installed in $plugins: $addons"
 
+# Workers load addons once, so a running server must restart to see them
+systemctl try-restart gramps-web || { echo "ERROR: restarting gramps-web failed"; exit 1; }
+
 # Cached API responses never expire until the tree changes, so answers given
-# without these addons (e.g. 404 for an unknown filter rule) would be served on
+# without these addons (e.g. 404 for an unknown filter rule) would be served on.
+# Clear the cache only now: a request to the old server, before the restart,
+# would have put such an answer back in.
 if [[ -d $data/cache/request ]]; then
     find "$data/cache/request" -type f -delete || { echo "ERROR: clearing $data/cache/request failed"; exit 1; }
     echo "Cleared the request cache"
