@@ -25,6 +25,26 @@ Details:
 - Multi-tree mode: the first-run page creates an admin and an empty tree. To
   load an existing tree use Settings -> Administration -> Data (collapsed
   section) -> Import Family Tree.
+- More trees: the web UI can't create or delete them, so `gramps-web-cli`
+  has extra `tree create` and `tree delete` commands. Each login belongs to
+  one tree; to switch trees, log in as a user of the other tree:
+
+  ```
+  sudo <basedir>/bin/gramps-web-cli tree create "Tree B"
+  sudo <basedir>/bin/gramps-web-cli user add baz-b PASSWORD --tree <tree-id> --role 4
+  sudo <basedir>/bin/gramps-web-cli tree delete [--delete-users] [--no-backup] "Tree B"
+  ```
+
+  `tree list` shows the IDs; trees can be given by ID or name. Role 4 is
+  owner; 5 is site admin.
+
+  `tree delete` first makes a backup in `<basedir>/data/backup/<tree-id>/`,
+  the same as Make Backup in the web UI (restore it by uploading it in Restore
+  from Backup, or unpack `data.gramps` from it for desktop Gramps). It then
+  asks for the tree's name to be typed. It refuses while users belong to the
+  tree, unless `--delete-users` is given, and always if a site admin does.
+  Media files are kept in `<basedir>/data/media/<tree-id>/`. The service is
+  restarted afterwards.
 
 ## Install
 
@@ -101,6 +121,7 @@ are kept. The user database schema is migrated each time the service starts.
 | `<basedir>/static/` | root | frontend |
 | `<basedir>/config.cfg` | root:gramps-web 0640 | Gramps Web API config, holds `SECRET_KEY` |
 | `<basedir>/bin/gramps-web-cli` | root | runs `python -m gramps_webapi` as gramps-web |
+| `<basedir>/bin/tree-{create,delete}.py` | root | the `tree create` and `tree delete` commands of gramps-web-cli |
 | `<basedir>/data/` | gramps-web | trees, media, users, search index, caches, backups |
 | `<basedir>/data/backup/<tree-id>/` | gramps-web | backups made in the web UI, `<uuid>.tar`, newest 5 kept per tree |
 | `<basedir>/data/gramps/gramps60/plugins/` | root | Gramps addons FilterRules and JSON |
@@ -141,5 +162,5 @@ name, not the name shown in the web UI.
 | `mk-frontend <basedir> [ver]` | root | frontend release into `static/` |
 | `mk-config <basedir> <name>` | root | data dirs + `config.cfg` (kept if present) |
 | `mk-addons <basedir>` | root | Gramps addons (FilterRules is needed by the Relationship Graph) |
-| `mk-service <basedir> <port> <workers>` | root | systemd unit + CLI wrapper |
+| `mk-service <basedir> <port> <workers>` | root | systemd unit + CLI wrapper (installs `cli/*.py`) |
 | `mk-apache <name> <port>` | root | Apache vhost (kept if present) |

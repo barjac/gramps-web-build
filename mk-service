@@ -53,16 +53,29 @@ systemctl daemon-reload || { echo "ERROR: systemctl daemon-reload failed"; exit 
 
 # CLI wrapper with the same environment as the service
 install -d -m 0755 "$basedir/bin" || exit 1
+
+# gramps_webapi has no "tree create" or "tree delete" command; gramps-web-cli
+# runs these helpers for them
+install -m 0644 "$(dirname "$(readlink -f "$0")")"/cli/tree-{create,delete}.py "$basedir/bin/" || exit 1
+
 cat > "$basedir/bin/gramps-web-cli" <<EOF
 #!/bin/bash
 # Run the gramps_webapi command line as the gramps-web user, e.g.
 #   $basedir/bin/gramps-web-cli tree list
+#   $basedir/bin/gramps-web-cli tree create NAME   (added by gramps-web-build)
+#   $basedir/bin/gramps-web-cli tree delete [--no-backup] [--delete-users] TREE   (ditto)
 #   $basedir/bin/gramps-web-cli search --tree <id> index-full
 ((UID)) && { echo "Run as root (sudo)"; exit 1; }
 cd $basedir/app || exit 1
-exec runuser -u gramps-web -- env GRAMPS_API_CONFIG=$basedir/config.cfg \\
+cmd=(-m gramps_webapi "\$@")
+[[ \$1 == tree && \$2 == create ]] && cmd=($basedir/bin/tree-create.py "\${@:3}")
+[[ \$1 == tree && \$2 == delete ]] && cmd=($basedir/bin/tree-delete.py "\${@:3}")
+runuser -u gramps-web -- env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY GRAMPS_API_CONFIG=$basedir/config.cfg \\
     GRAMPSHOME=$basedir/data GRAMPS_DATABASE_PATH=$basedir/data/grampsdb HOME=$basedir/data \\
-    $basedir/venv/bin/python -m gramps_webapi "\$@"
+    $basedir/venv/bin/python "\${cmd[@]}" || exit
+# the running server may still hold the deleted tree open
+[[ \$1 == tree && \$2 == delete && \$3 != -h && \$3 != --help ]] && systemctl try-restart gramps-web
+exit 0
 EOF
 chmod 0755 "$basedir/bin/gramps-web-cli" || exit 1
 
