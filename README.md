@@ -23,8 +23,8 @@ Details:
 - Storage: SQLite for family trees, users and the search index.
 - No Celery/Redis: background tasks run inline.
 - Multi-tree mode: the first-run page creates an admin and an empty tree. To
-  load an existing tree use Settings -> Administration -> Data (collapsed
-  section) -> Import Family Tree.
+  load an existing tree use the round person icon (top right) ->
+  Administration -> Import Family Tree.
 - More trees: the web UI can't create or delete them, so `gramps-web-cli`
   has extra `tree create`, `tree delete` and `tree backup` commands. Each login belongs to
   one tree; to switch trees, log in as a user of the other tree:
@@ -39,7 +39,7 @@ Details:
   `tree list` shows the IDs; trees can be given by ID or name. `--role` is
   one of the roles below. Give a tree's own manager 4, and keep 5 for
   the one site admin: a site admin can see and change every tree and user.
-  Roles can be changed later in Settings -> Administration -> Manage users.
+  Roles can be changed later in the person icon menu -> Manage users.
 
   | Role | Name | Can also (each role has all rights of the ones above it) |
   |---|---|---|
@@ -109,7 +109,8 @@ To change the name later, edit it in the Apache vhost (see below), in
 `BASE_URL` in `config.cfg` and in `~/.gramps-web-build.cfg`, then reload
 Apache and restart gramps-web.
 
-The app has no built-in help. Documentation is on the Gramps Web site:
+Documentation is on the Gramps Web site (see also
+[Help for your users](#help-for-your-users)):
 
 - User guide: https://www.grampsweb.org/user-guide/
 - Administration (users, roles, trees): https://www.grampsweb.org/administration/admin/
@@ -168,6 +169,39 @@ and `<basedir>/config.cfg`.
 `<basedir>/data/` is readable only by gramps-web, so list or copy backups as
 root, e.g. `ls -lR <basedir>/data/backup`. `<tree-id>` is the tree's directory
 name, not the name shown in the web UI.
+
+## Help for your users
+
+The app's own Help (the round person icon at the top right -> Help) opens the
+online user guide. The guide has other languages too. For relatives new to it,
+these pages are a good start:
+
+- First login: https://www.grampsweb.org/user-guide/first-login/
+- How the data fits together: https://www.grampsweb.org/user-guide/data-model/
+  (dates and places belong to events, and a marriage is an event of the
+  family, not of each person)
+- Search and lists: https://www.grampsweb.org/user-guide/search/,
+  https://www.grampsweb.org/user-guide/lists/
+- Family tree chart and editing from it:
+  https://www.grampsweb.org/user-guide/tree/,
+  https://www.grampsweb.org/user-guide/tree-edit/
+- Undoing changes (revision history): https://www.grampsweb.org/user-guide/revisions/
+
+Tips:
+
+- Send each new user a short welcome note with the site address, their user
+  name and the links above. Send the password separately, and ask them to
+  change it under User settings.
+- Start relatives at role 2 (Contributor: can add but not change or delete),
+  and raise them to 3 (Editor) once they're comfortable.
+- Point them at the Gramps Web guide, not the desktop Gramps wiki, whose
+  screens are different.
+- Reassure them that mistakes can be undone: every change is in the revision
+  history, and the daily backups (the last 30 versions of each tree) can be
+  restored by an owner in Administration -> Backups.
+- Ask them to check with you before deleting people who look like duplicates.
+- Questions you can't answer: the Gramps Web forum,
+  https://gramps.discourse.group/c/gramps-web
 
 ## Notes
 
