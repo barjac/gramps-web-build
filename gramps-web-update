@@ -59,16 +59,25 @@ new_web=v${new_web#v}
 echo -e "\n gramps-webapi : ${cur_api:-unknown} -> $new_api"
 echo -e " gramps-web    : ${cur_web:-unknown} -> $new_web\n"
 
+# Backend and frontend are reinstalled only when their versions change (or
+# with --force). The other steps install files from this project, so they
+# also run when the self-update above pulled a newer gramps-web-build.
+app_steps="
+    $RUN_DIR/mk-backend $basedir '$new_api'
+    $RUN_DIR/mk-frontend $basedir '$new_web'"
 if [[ $cur_api == "$new_api" && $cur_web == "$new_web" && $1 != "--force" ]]; then
-    echo "Already up to date (use --force to reinstall anyway)"
-    exit 0
+    if ! $RESTARTING; then
+        echo "Already up to date (use --force to reinstall anyway)"
+        exit 0
+    fi
+    echo "Gramps Web is up to date, but gramps-web-build was updated:"
+    echo "reinstalling its config, addons, service and CLI (use --force to reinstall everything)"
+    app_steps=
 fi
 
 echo "Enter the root password if requested to update Gramps Web"
 run_as_root "set -e
-    systemctl stop gramps-web
-    $RUN_DIR/mk-backend $basedir '$new_api'
-    $RUN_DIR/mk-frontend $basedir '$new_web'
+    systemctl stop gramps-web$app_steps
     $RUN_DIR/mk-config $basedir $servername
     $RUN_DIR/mk-addons $basedir
     $RUN_DIR/mk-service $basedir $port $workers

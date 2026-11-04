@@ -112,6 +112,12 @@ Updates the backend and frontend to the latest releases (or the versions
 pinned in `~/.gramps-web-build.cfg`). Data, `config.cfg` and the Apache vhost
 are kept. The user database schema is migrated each time the service starts.
 
+It first pulls the latest gramps-web-build itself. If that brought changes
+but Gramps Web is already current, it still reinstalls the parts this project
+provides (config dirs, addons, systemd unit, `gramps-web-cli` and its
+helpers) without reinstalling the backend and frontend. `--force` reinstalls
+everything.
+
 ## Settings: `~/.gramps-web-build.cfg`
 
 | key | default | |
