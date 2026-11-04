@@ -35,8 +35,19 @@ Details:
   sudo <basedir>/bin/gramps-web-cli tree delete [--delete-users] [--no-backup] "Tree B"
   ```
 
-  `tree list` shows the IDs; trees can be given by ID or name. Role 4 is
-  owner; 5 is site admin.
+  `tree list` shows the IDs; trees can be given by ID or name. `--role` is
+  one of the roles below. Give a tree's own manager 4, and keep 5 for
+  the one site admin: a site admin can see and change every tree and user.
+  Roles can be changed later in Settings -> Administration -> Manage users.
+
+  | Role | Name | Can also (each role has all rights of the ones above it) |
+  |---|---|---|
+  | 0 | Guest | view the tree, but not private records; edit own account |
+  | 1 | Member | view private records (e.g. living people) |
+  | 2 | Contributor | add people, events and other records |
+  | 3 | Editor | edit and delete records; edit custom filters |
+  | 4 | Owner | manage the tree's users, import, backups, repair, batch delete |
+  | 5 | Site admin | all trees and users, users between trees, site settings |
 
   `tree delete` first makes a backup in `<basedir>/data/backup/<tree-id>/`,
   the same as Make Backup in the web UI (restore it by uploading it in Restore
