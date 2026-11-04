@@ -54,9 +54,9 @@ systemctl daemon-reload || { echo "ERROR: systemctl daemon-reload failed"; exit 
 # CLI wrapper with the same environment as the service
 install -d -m 0755 "$basedir/bin" || exit 1
 
-# gramps_webapi has no "tree create" or "tree delete" command; gramps-web-cli
-# runs these helpers for them
-install -m 0644 "$(dirname "$(readlink -f "$0")")"/cli/tree-{create,delete}.py "$basedir/bin/" || exit 1
+# gramps_webapi has no "tree create", "tree delete" or "tree backup" command;
+# gramps-web-cli runs these helpers for them
+install -m 0644 "$(dirname "$(readlink -f "$0")")"/cli/tree-{create,delete,backup}.py "$basedir/bin/" || exit 1
 
 cat > "$basedir/bin/gramps-web-cli" <<EOF
 #!/bin/bash
@@ -64,12 +64,14 @@ cat > "$basedir/bin/gramps-web-cli" <<EOF
 #   $basedir/bin/gramps-web-cli tree list
 #   $basedir/bin/gramps-web-cli tree create NAME   (added by gramps-web-build)
 #   $basedir/bin/gramps-web-cli tree delete [--no-backup] [--delete-users] TREE   (ditto)
+#   $basedir/bin/gramps-web-cli tree backup [--force] [TREE...]   (ditto)
 #   $basedir/bin/gramps-web-cli search --tree <id> index-full
 ((UID)) && { echo "Run as root (sudo)"; exit 1; }
 cd $basedir/app || exit 1
 cmd=(-m gramps_webapi "\$@")
 [[ \$1 == tree && \$2 == create ]] && cmd=($basedir/bin/tree-create.py "\${@:3}")
 [[ \$1 == tree && \$2 == delete ]] && cmd=($basedir/bin/tree-delete.py "\${@:3}")
+[[ \$1 == tree && \$2 == backup ]] && cmd=($basedir/bin/tree-backup.py "\${@:3}")
 runuser -u gramps-web -- env -u DISPLAY -u WAYLAND_DISPLAY -u XAUTHORITY GRAMPS_API_CONFIG=$basedir/config.cfg \\
     GRAMPSHOME=$basedir/data GRAMPS_DATABASE_PATH=$basedir/data/grampsdb HOME=$basedir/data \\
     $basedir/venv/bin/python "\${cmd[@]}" || exit
@@ -79,4 +81,50 @@ exit 0
 EOF
 chmod 0755 "$basedir/bin/gramps-web-cli" || exit 1
 
-echo "Created gramps-web.service and $basedir/bin/gramps-web-cli"
+# Daily backup of every tree, in the web UI's format (see cli/tree-backup.py)
+cat > /etc/systemd/system/gramps-web-backup.service <<EOF
+# Created by gramps-web-build - rerun mk-service rather than editing
+[Unit]
+Description=Back up the Gramps Web family trees
+After=gramps-web.service
+
+[Service]
+Type=oneshot
+User=gramps-web
+Group=gramps-web
+WorkingDirectory=$basedir/app
+Environment=GRAMPS_API_CONFIG=$basedir/config.cfg
+Environment=GRAMPSHOME=$basedir/data
+Environment=GRAMPS_DATABASE_PATH=$basedir/data/grampsdb
+Environment=HOME=$basedir/data
+ExecStart=$basedir/venv/bin/python $basedir/bin/tree-backup.py
+Nice=10
+IOSchedulingClass=idle
+
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectSystem=strict
+ProtectHome=$protect_home
+ReadWritePaths=$basedir/data
+EOF
+
+cat > /etc/systemd/system/gramps-web-backup.timer <<EOF
+# Created by gramps-web-build - rerun mk-service rather than editing,
+# or change the time with: systemctl edit gramps-web-backup.timer
+[Unit]
+Description=Daily backup of the Gramps Web family trees
+
+[Timer]
+OnCalendar=*-*-* 03:30
+RandomizedDelaySec=15min
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+EOF
+
+systemctl daemon-reload || { echo "ERROR: systemctl daemon-reload failed"; exit 1; }
+systemctl enable --now gramps-web-backup.timer \
+    || { echo "ERROR: enabling gramps-web-backup.timer failed"; exit 1; }
+
+echo "Created gramps-web.service, gramps-web-backup.timer (daily) and $basedir/bin/gramps-web-cli"

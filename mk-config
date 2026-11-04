@@ -16,8 +16,18 @@ for d in "" grampsdb media users search backup cache cache/request cache/thumbna
     install -d -m 0750 -o gramps-web -g gramps-web "$data/$d" || { echo "ERROR: creating $data/$d failed"; exit 1; }
 done
 
+# Upstream keeps 5 backups per tree; the daily gramps-web-backup.timer skips
+# unchanged trees, so 30 is the last 30 versions (a month or more), ~KB each
+backup_keep="BACKUP_KEEP = 30  # newest backups kept per tree (web UI and daily timer)"
+
 if [[ -f $basedir/config.cfg ]]; then
     echo "Keeping existing $basedir/config.cfg"
+    # added for installs made before the backup timer; a value set by hand stays
+    if ! grep -q '^[[:space:]]*BACKUP_KEEP[[:space:]]*=' "$basedir/config.cfg"; then
+        printf '\n%s\n' "$backup_keep" >> "$basedir/config.cfg" \
+            || { echo "ERROR: adding BACKUP_KEEP to config.cfg failed"; exit 1; }
+        echo "Added to config.cfg: $backup_keep"
+    fi
     exit 0
 fi
 
@@ -40,6 +50,7 @@ SEARCH_INDEX_DB_URI = "sqlite:///$data/search/search_index.db"
 MEDIA_BASE_DIR = "$data/media"
 STATIC_PATH = "$basedir/static"
 BACKUP_DIR = "$data/backup"
+$backup_keep
 REPORT_DIR = "$data/cache/reports"
 EXPORT_DIR = "$data/cache/export"
 

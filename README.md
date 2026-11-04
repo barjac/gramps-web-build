@@ -26,13 +26,14 @@ Details:
   load an existing tree use Settings -> Administration -> Data (collapsed
   section) -> Import Family Tree.
 - More trees: the web UI can't create or delete them, so `gramps-web-cli`
-  has extra `tree create` and `tree delete` commands. Each login belongs to
+  has extra `tree create`, `tree delete` and `tree backup` commands. Each login belongs to
   one tree; to switch trees, log in as a user of the other tree:
 
   ```
   sudo <basedir>/bin/gramps-web-cli tree create "Tree B"
   sudo <basedir>/bin/gramps-web-cli user add baz-b PASSWORD --tree <tree-id> --role 4
   sudo <basedir>/bin/gramps-web-cli tree delete [--delete-users] [--no-backup] "Tree B"
+  sudo <basedir>/bin/gramps-web-cli tree backup [--force] [TREE...]
   ```
 
   `tree list` shows the IDs; trees can be given by ID or name. `--role` is
@@ -56,6 +57,17 @@ Details:
   tree, unless `--delete-users` is given, and always if a site admin does.
   Media files are kept in `<basedir>/data/media/<tree-id>/`. The service is
   restarted afterwards.
+- Daily backups: `gramps-web-backup.timer` runs `tree backup` for every tree
+  at about 03:30 (`Persistent=true`: a run missed while the machine was off
+  happens at the next boot). It makes the same archive as Make Backup, so the
+  backups are listed, downloadable and restorable in the web UI. A tree that
+  hasn't changed since its newest backup gets no new one, so the
+  `BACKUP_KEEP = 30` archives kept per tree (set in `config.cfg`; upstream's
+  default is 5) are the last 30 different versions, not 30 days. Manual
+  backups count towards the same 30. Media files are not in the archives.
+  Check it with `systemctl list-timers gramps-web-backup.timer` and
+  `journalctl -u gramps-web-backup`; change the time with
+  `systemctl edit gramps-web-backup.timer`.
 
 ## Install
 
@@ -138,17 +150,20 @@ everything.
 | `<basedir>/static/` | root | frontend |
 | `<basedir>/config.cfg` | root:gramps-web 0640 | Gramps Web API config, holds `SECRET_KEY` |
 | `<basedir>/bin/gramps-web-cli` | root | runs `python -m gramps_webapi` as gramps-web |
-| `<basedir>/bin/tree-{create,delete}.py` | root | the `tree create` and `tree delete` commands of gramps-web-cli |
+| `<basedir>/bin/tree-{create,delete,backup}.py` | root | the `tree create`, `tree delete` and `tree backup` commands of gramps-web-cli |
 | `<basedir>/data/` | gramps-web | trees, media, users, search index, caches, backups |
-| `<basedir>/data/backup/<tree-id>/` | gramps-web | backups made in the web UI, `<uuid>.tar`, newest 5 kept per tree |
+| `<basedir>/data/backup/<tree-id>/` | gramps-web | backups from the web UI and the daily timer, `<uuid>.tar`, newest `BACKUP_KEEP` (30) kept per tree |
 | `<basedir>/data/gramps/gramps60/plugins/` | root | Gramps addons FilterRules and JSON |
 | `/etc/systemd/system/gramps-web.service` | | the service |
+| `/etc/systemd/system/gramps-web-backup.{service,timer}` | | daily backup of every tree |
 | `/etc/httpd/conf/sites.d/gramps-web.conf` | | Apache vhost on port 80 (Mageia) |
 | `/etc/apache2/sites-available/gramps-web.conf` | | Apache vhost on port 80 (Debian, Ubuntu, Mint), enabled with `a2ensite` |
 | `/var/log/httpd/gramps-web_{error,access}_log` | | Apache logs for the site (Mageia) |
 | `/var/log/apache2/gramps-web_{error,access}.log` | | Apache logs for the site (Debian, Ubuntu, Mint) |
 
-Back up `<basedir>/data/` and `<basedir>/config.cfg`.
+The daily backups are on the same disk as the trees. For a copy elsewhere,
+back up `<basedir>/data/` (it includes `data/backup/` and the media files)
+and `<basedir>/config.cfg`.
 
 `<basedir>/data/` is readable only by gramps-web, so list or copy backups as
 root, e.g. `ls -lR <basedir>/data/backup`. `<tree-id>` is the tree's directory
@@ -185,7 +200,7 @@ name, not the name shown in the web UI.
 | `gramps-web-passwd <user> [basedir]` | root | set a user's password (forgotten password, no SMTP) |
 | `mk-backend <basedir> [ver]` | root | venv + gramps-webapi + alembic files |
 | `mk-frontend <basedir> [ver]` | root | frontend release into `static/` |
-| `mk-config <basedir> <name>` | root | data dirs + `config.cfg` (kept if present) |
+| `mk-config <basedir> <name>` | root | data dirs + `config.cfg` (kept if present; only `BACKUP_KEEP` is added if missing) |
 | `mk-addons <basedir>` | root | Gramps addons (FilterRules is needed by the Relationship Graph) |
-| `mk-service <basedir> <port> <workers>` | root | systemd unit + CLI wrapper (installs `cli/*.py`) |
+| `mk-service <basedir> <port> <workers>` | root | systemd units (service, daily backup timer) + CLI wrapper (installs `cli/*.py`) |
 | `mk-apache <name> <port>` | root | Apache vhost (kept if present) |
