@@ -15,6 +15,19 @@ import shutil
 import sys
 import warnings
 
+# Gramps asks GTK for the icon theme on import, which as the service user
+# (no screen) prints a Gtk-CRITICAL warning. Answer "no theme" instead, as
+# Gramps does without GTK; GTK itself stays importable for the addons.
+try:
+    import gi
+
+    gi.require_version("Gtk", "3.0")
+    from gi.repository import Gtk
+
+    Gtk.IconTheme.get_default = staticmethod(lambda: None)
+except (ImportError, ValueError):
+    pass
+
 from gramps_webapi.api.backup import write_backup
 from gramps_webapi.api.backup_store import get_backup_store
 from gramps_webapi.api.search import get_search_indexer
