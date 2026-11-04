@@ -160,6 +160,14 @@ name, not the name shown in the web UI.
 - **Media:** `ffmpeg` (video thumbnails), `tesseract` with English (OCR) and
   Poppler (PDF thumbnails) are installed. For other OCR languages install
   e.g. `tesseract-deu` (Mageia) or `tesseract-ocr-deu` (Debian family).
+- **External search** (a person's External Search panel): each site is just
+  a link filled in from the person's name and dates, opened in your own
+  browser, so a site you are logged in to there (e.g. Ancestry) shows its
+  results with your subscription. Gramps Web stores no site logins. The
+  built-in Ancestry link goes to ancestry.com; for the UK site, add your own
+  engine in the panel's edit mode, e.g.
+  `https://www.ancestry.co.uk/search?name={{name_given}}_{{name_surname}}&birth={{birth_year}}&death={{death_year}}`,
+  and hide the built-in one. Other placeholders include `{{place_name}}`.
 - Not installed: AI chat and face detection.
 
 ## Scripts
