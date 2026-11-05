@@ -28,13 +28,17 @@ echo "Installing gramps-webapi ${version:-(latest)}"
 
 # gramps-webapi caps PyGObject at 3.50 for upstream's Docker base; the venv uses
 # the distro's PyGObject (newer on Mageia, Ubuntu 26.04), so drop that cap.
+# Of the extras only "face" is installed: OpenCV for face detection in the
+# media region editor (the others are AI chat, Sentry and tests).
 reqs=$venv/gramps-webapi-requirements.txt
 "$py" - > "$reqs" <<'EOF' || { echo "ERROR: reading gramps-webapi requirements failed"; exit 1; }
 import importlib.metadata as m
 import re
 for req in m.requires("gramps-webapi"):
-    if ";" in req:  # extras such as ai, face, test
-        continue
+    if ";" in req:
+        req, marker = req.split(";", 1)
+        if not re.search(r"""extra\s*==\s*["']face["']""", marker):
+            continue
     if re.match(r"pygobject\b", req, re.I):
         req = "PyGObject"
     print(req)
