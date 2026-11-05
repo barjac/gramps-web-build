@@ -44,6 +44,17 @@ echo "(pip may report that gramps-webapi requires PyGObject<=3.50.0 - that is ex
 "$py" -m pip install --upgrade-strategy only-if-needed -r "$reqs" gunicorn \
     || { echo "ERROR: dependency install failed"; exit 1; }
 
+# Thumbnails are encoded as AVIF. Mageia's python3-pillow (seen via the system
+# site-packages) satisfies the version requirement but is built without AVIF,
+# so every thumbnail fails. Put PyPI's Pillow, which has AVIF, in the venv.
+has_avif='from PIL import features; import sys; sys.exit(not features.check("avif"))'
+if ! "$py" -c "$has_avif" 2>/dev/null; then
+    echo "Installing Pillow with AVIF support into the venv"
+    "$py" -m pip install --upgrade --ignore-installed --no-deps Pillow \
+        || { echo "ERROR: Pillow install failed"; exit 1; }
+    "$py" -c "$has_avif" || { echo "ERROR: Pillow in $venv still lacks AVIF support"; exit 1; }
+fi
+
 # The wheel lacks the alembic files needed by 'user migrate' - take them from the sdist
 installed=$("$py" -c 'import importlib.metadata as m; print(m.version("gramps-webapi"))') \
     || { echo "ERROR: gramps-webapi not importable"; exit 1; }
