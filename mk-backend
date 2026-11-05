@@ -79,3 +79,14 @@ mv "$basedir/app.new" "$basedir/app" || { echo "ERROR: installing $basedir/app f
 
 echo "gramps-webapi $installed installed"
 "$py" -c 'import gramps; from gramps.version import VERSION; print("Using Gramps", VERSION, "from", gramps.__path__[0])'
+
+# Thumbnails and face detection results are cached on disk for good, keyed on
+# the file's checksum, and flask-caching >= 2.5 caches error responses too. So
+# a failure from before this install (e.g. 501 "OpenCV is not installed", or a
+# thumbnailer error) would be served on. Clear that cache; it is rebuilt on
+# demand. The service is stopped while the backend is installed.
+thumbs=$basedir/data/cache/thumbnail
+if [[ -d $thumbs ]]; then
+    find "$thumbs" -type f -delete || { echo "ERROR: clearing $thumbs failed"; exit 1; }
+    echo "Cleared the thumbnail cache"
+fi
